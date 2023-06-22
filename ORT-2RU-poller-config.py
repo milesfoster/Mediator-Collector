@@ -1,6 +1,6 @@
 import json
 from insite_plugin import InsitePlugin
-from ORT_2RU import MediatorCollector
+from ORT_2RU_basic import MediatorCollector
 
 
 class Plugin(InsitePlugin):
