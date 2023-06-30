@@ -1,6 +1,7 @@
 import paramiko
 import json
 import copy
+import time
 
 class MediatorCollector:
     def __init__(self, **kwargs):
@@ -35,6 +36,28 @@ class MediatorCollector:
             "optUsage": "df -h  /opt | awk '{print $5}' | grep -v 'Use'",
             "loadAvg": "cat /proc/loadavg | awk '{print $3}'",
             "hostname": "hostname", 
+            "nvidiaTemp": "nvidia-smi -q -d temperature|grep 'GPU Current Temp'|awk '{ print $5 $6 }'",
+            "upTime": "cat /proc/uptime |awk '{ print $1/3600 }'",
+            "memUsed": "test4=$(free -g |grep Mem | awk '{print ($3)}'|grep -v free) &&test=$(free -g |grep Mem | awk '{print ($6)}'|grep -v free) &&  test2=$(free -g |grep Mem | awk '{print ($7)}'|grep -v free) && test3=$(free -g |grep Mem | awk '{print ($4)}'|grep -v free) && test1=$(free -g |grep Mem | awk '{print ($2)}') && echo 'scale=2 ; (($test4 -($test + $test2))) / $test1 *100' | bc"
+        }
+
+        sudoCommands = {
+            "drive1MediaErrors": "sudo megacli -PDInfo -PhysDrv [252:0] -aALL|grep 'Media Error'",
+            "drive2MediaErrors": "sudo megacli -PDInfo -PhysDrv [252:1] -aALL|grep 'Media Error'",
+            "drive3MediaErrors": "sudo megacli -PDInfo -PhysDrv [252:2] -aALL|grep 'Media Error'",
+            "drive4MediaErrors": "sudo megacli -PDInfo -PhysDrv [252:3] -aALL|grep 'Media Error'",
+            "drive5MediaErrors": "sudo megacli -PDInfo -PhysDrv [252:4] -aALL|grep 'Media Error'",
+            "drive6MediaErrors": "sudo megacli -PDInfo -PhysDrv [252:5] -aALL|grep 'Media Error'",
+            "drive7MediaErrors": "sudo megacli -PDInfo -PhysDrv [252:6] -aALL|grep 'Media Error'",
+            "drive8MediaErrors": "sudo megacli -PDInfo -PhysDrv [252:7] -aALL|grep 'Media Error'",
+            "drive1PredictiveErrors": "sudo megacli -PDInfo -PhysDrv [252:0] -aALL|grep 'Predictive Failure'",
+            "drive2PredictiveErrors": "sudo megacli -PDInfo -PhysDrv [252:1] -aALL|grep 'Predictive Failure'",
+            "drive3PredictiveErrors": "sudo megacli -PDInfo -PhysDrv [252:2] -aALL|grep 'Predictive Failure'",
+            "drive4PredictiveErrors": "sudo megacli -PDInfo -PhysDrv [252:3] -aALL|grep 'Predictive Failure'",
+            "drive5PredictiveErrors": "sudo megacli -PDInfo -PhysDrv [252:4] -aALL|grep 'Predictive Failure'",
+            "drive6PredictiveErrors": "sudo megacli -PDInfo -PhysDrv [252:5] -aALL|grep 'Predictive Failure'",
+            "drive7PredictiveErrors": "sudo megacli -PDInfo -PhysDrv [252:6] -aALL|grep 'Predictive Failure'",
+            "drive8PredictiveErrors": "sudo megacli -PDInfo -PhysDrv [252:7] -aALL|grep 'Predictive Failure'"
         }
 
         client = paramiko.client.SSHClient()
@@ -47,8 +70,40 @@ class MediatorCollector:
 
             _stdin, _stdout,_stderr = client.exec_command(value)
             result = (_stdout.read().decode())
-            print(result)
-            fields[key] = result.rstrip("\n")
+
+            if "command not found" in result:
+                fields[key] = "Command not found"
+
+            elif result == "":
+                fields[key] = f"No output from command '{key}'"
+
+            else:
+                fields[key] = result.rstrip("\n")
+
+
+
+        for key, value in sudoCommands.items():
+
+
+            _stdin, _stdout,_stderr = client.exec_command(value, get_pty = True, timeout = 2)
+            _stdin.write(self.password + '\n')
+            _stdin.flush()
+            result = (_stdout.read().decode())
+
+
+            if "command not found" in result:
+                fields[key] = "Command not found"
+
+            elif result == "":
+                fields[key] = f"No output from command '{key}'"
+
+            else:
+                result = result.split(":")
+                result = result[1]
+                result = result.strip(" \r\n")
+                fields[key] = result
+            
+
 
         document = {"fields": fields, "host": self.host, "name": "mediatorCollector"}
         documents.append(document)
@@ -68,7 +123,7 @@ def main():
 
     mediator = MediatorCollector(**params)
 
-    while input_quit is not "q":
+    while input_quit != "q":
 
 
         documents = mediator.collect
